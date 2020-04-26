@@ -154,18 +154,18 @@ def exchange_timestamps_thread(other_uuid: str, other_ip: str, other_tcp_port: i
     timestamp = bytearray(struct.pack("f", timestamp))
 
     # send time stamp to the source of the message
-    #client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    #client_socket.connect(('',int(get_tcp_port())))
-    server.connect((other_ip,other_tcp_port))
+    client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    client_socket.connect((other_ip,other_tcp_port))
+
     try:
-        server.sendall(timestamp)
+        client_socket.sendall(timestamp)
         time.sleep(1)
     except socket.error as e:
         print_red("ERROR")
     except IOError as e:
         print_red("error pipe")
 
-    server.close()
+    #client_socket.close()
     pass
 
 
