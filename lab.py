@@ -110,10 +110,10 @@ def receive_broadcast_thread():
         other_uuid = msg_array[0]
         tcp_port = msg_array[2]
 
-        args = (other_uuid,  ip,int(tcp_port))
+        args = (other_uuid, ip, int(tcp_port))
         print_red(args)
         # send timestamp
-        if(other_uuid not in uuids):
+        if other_uuid not in uuids:
             thread3 = daemon_thread_builder(exchange_timestamps_thread, args)
             thread3.start()
             thread3.join()
@@ -132,9 +132,14 @@ def tcp_server_thread():
     while True:
         server.listen(50)
         print_red("waiting for client")
-        c_socket,address = server.accept()
+        c_socket, address = server.accept()
         data = c_socket.recv(1024)
         print_green(f"Client accepted is {c_socket.getsockname()[1]} the message is {data}")
+        received_stamp = struct.unpack("d", data)
+        print(f"received timestamp {received_stamp}")
+        now = datetime.datetime.utcnow().timestamp()
+        delay = now - received_stamp[0]
+        print_red(f"DEELLAAYYYY ISS {delay}")
 
     pass
 
@@ -151,11 +156,12 @@ def exchange_timestamps_thread(other_uuid: str, other_ip: str, other_tcp_port: i
 
     print_yellow(f"ATTEMPTING TO CONNECT TO {other_uuid}")
     timestamp = datetime.datetime.utcnow().timestamp()
-    timestamp = bytearray(struct.pack("f", timestamp))
+    print(f"sent timestamp {timestamp}")
+    timestamp = bytearray(struct.pack("d", timestamp))
 
     # send time stamp to the source of the message
     client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    client_socket.connect((other_ip,other_tcp_port))
+    client_socket.connect((other_ip, other_tcp_port))
 
     try:
         client_socket.sendall(timestamp)
@@ -165,7 +171,7 @@ def exchange_timestamps_thread(other_uuid: str, other_ip: str, other_tcp_port: i
     except IOError as e:
         print_red("error pipe")
 
-    #client_socket.close()
+    client_socket.close()
     pass
 
 
