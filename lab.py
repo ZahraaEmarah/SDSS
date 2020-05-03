@@ -141,6 +141,10 @@ def tcp_server_thread():
         delay = now - received_stamp[0]
         print_red(f"DEELLAAYYYY ISS {delay}")
 
+        delay = str(delay)
+        data = delay.encode("utf-8")
+        c_socket.sendall(data)
+
     pass
 
 
@@ -171,7 +175,9 @@ def exchange_timestamps_thread(other_uuid: str, other_ip: str, other_tcp_port: i
     except IOError as e:
         print_red("error pipe")
 
-    client_socket.close()
+    delay = client_socket.recv(4096)
+    dell = delay.decode("utf-8")
+    print(f"received delay is {dell}")
     pass
 
 
