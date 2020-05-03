@@ -78,14 +78,15 @@ if broadcaster.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1) == -1:
     exit(1)
 broadcaster.bind(('', get_broadcast_port()))
 
-
+counter = 0
 def send_broadcast_thread():
+    global counter
     node_uuid = get_node_uuid()
     tcp_port = get_tcp_port()
     # print that you are available
     print_green(f"[UDP] Device -> EVERYBODY : {node_uuid} ON {tcp_port} ")
     message = node_uuid + " ON " + tcp_port
-    counter = 0
+
     while True:
         # TODO: write logic for sending broadcasts.
         broadcaster.sendto(message.encode('UTF-8'), ('255.255.255.255', get_broadcast_port()))
@@ -111,9 +112,12 @@ def receive_broadcast_thread():
         tcp_port = msg_array[2]
 
         args = (other_uuid, ip, int(tcp_port))
-        print_red(args)
+        print_yellow(args)
         # send timestamp
-        if other_uuid not in uuids:
+
+        if other_uuid not in uuids \
+                or (other_uuid in neighbor_information
+                    and counter - neighbor_information.get(other_uuid).last_timestamp == 10):
             thread3 = daemon_thread_builder(exchange_timestamps_thread, args)
             thread3.start()
             thread3.join()
@@ -129,17 +133,17 @@ def tcp_server_thread():
     thread2 = daemon_thread_builder(receive_broadcast_thread)
     thread1.start()
     thread2.start()
+    server.listen(50)
     while True:
-        server.listen(50)
-        print_red("waiting for client")
+        #print_red("waiting for client")
         c_socket, address = server.accept()
         data = c_socket.recv(1024)
         print_green(f"Client accepted is {c_socket.getsockname()[1]} the message is {data}")
         received_stamp = struct.unpack("d", data)
-        print(f"received timestamp {received_stamp}")
+        print_yellow(f"Received Timestamp: {received_stamp}")
         now = datetime.datetime.utcnow().timestamp()
         delay = now - received_stamp[0]
-        print_red(f"DEELLAAYYYY ISS {delay}")
+        print_blue(f"SENT DELAY IS: {delay}")
 
         delay = str(delay)
         data = delay.encode("utf-8")
@@ -160,7 +164,8 @@ def exchange_timestamps_thread(other_uuid: str, other_ip: str, other_tcp_port: i
 
     print_yellow(f"ATTEMPTING TO CONNECT TO {other_uuid}")
     timestamp = datetime.datetime.utcnow().timestamp()
-    print(f"sent timestamp {timestamp}")
+    print_green(f"[TCP] {get_node_uuid()} -> {other_uuid} : [{get_node_uuid()}'s TIMESTAMP]")
+    print_yellow(f"Sent Timestamp: {timestamp}")
     timestamp = bytearray(struct.pack("d", timestamp))
 
     # send time stamp to the source of the message
@@ -175,9 +180,10 @@ def exchange_timestamps_thread(other_uuid: str, other_ip: str, other_tcp_port: i
     except IOError as e:
         print_red("error pipe")
 
-    delay = client_socket.recv(4096)
+    delay = client_socket.recv(1024)
     dell = delay.decode("utf-8")
-    print(f"received delay is {dell}")
+    print_blue(f"RECEIVED DEALAY IS {dell}")
+    neighbor_information[other_uuid] = NeighborInfo(dell, counter)
     pass
 
 
@@ -191,15 +197,9 @@ def daemon_thread_builder(target, args=()) -> threading.Thread:
 
 
 def entrypoint():
-    #thread1 = daemon_thread_builder(send_broadcast_thread)
-    #thread2 = daemon_thread_builder(receive_broadcast_thread)
-    thread3 = daemon_thread_builder(tcp_server_thread())
-    #thread1.start()
-    #thread2.start()
-    thread3.start()
-    #thread1.join()
-    #thread2.join()
-    thread3.join()
+    thread = daemon_thread_builder(tcp_server_thread())
+    thread.start()
+    thread.join()
     pass
 
 
