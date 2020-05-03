@@ -77,15 +77,16 @@ if broadcaster.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1) == -1:
     print_red("setsockopt (SO_BROADCAST)")  # if error
     exit(1)
 broadcaster.bind(('', get_broadcast_port()))
+counter = 0
 
 
 def send_broadcast_thread():
+    global counter
     node_uuid = get_node_uuid()
     tcp_port = get_tcp_port()
     # print that you are available
     print_green(f"[UDP] Device -> EVERYBODY : {node_uuid} ON {tcp_port} ")
     message = node_uuid + " ON " + tcp_port
-    counter = 0
     while True:
         # TODO: write logic for sending broadcasts.
         broadcaster.sendto(message.encode('UTF-8'), ('255.255.255.255', get_broadcast_port()))
@@ -99,7 +100,8 @@ def receive_broadcast_thread():
     launches a thread to connect to new nodes
     and exchange timestamps.
     """
-    uuids = []
+    #uuids = []
+    global counter
     while True:
         # TODO: write logic for receiving broadcasts.
         data, (ip, port) = broadcaster.recvfrom(4096)
@@ -113,11 +115,12 @@ def receive_broadcast_thread():
         args = (other_uuid, ip, int(tcp_port))
         print_red(args)
         # send timestamp
-        if other_uuid not in uuids:
-            thread3 = daemon_thread_builder(exchange_timestamps_thread, args)
-            thread3.start()
-            thread3.join()
-        uuids.append(other_uuid)
+        if other_uuid not in neighbor_information \
+                or (other_uuid in neighbor_information
+                    and neighbor_information.get(other_uuid).last_timestamp - counter == 10):
+            thread4 = daemon_thread_builder(exchange_timestamps_thread, args)
+            thread4.start()
+            #thread4.join()
 
 
 def tcp_server_thread():
@@ -125,12 +128,12 @@ def tcp_server_thread():
     Accept connections from other nodes and send them
     this node's timestamp once they connect.
     """
-    thread1 = daemon_thread_builder(send_broadcast_thread)
-    thread2 = daemon_thread_builder(receive_broadcast_thread)
-    thread1.start()
-    thread2.start()
+    #thread1 = daemon_thread_builder(send_broadcast_thread)
+    #thread2 = daemon_thread_builder(receive_broadcast_thread)
+    #thread1.start()
+    #thread2.start()
     while True:
-        server.listen(50)
+        #server.listen(50)
         print_red("waiting for client")
         c_socket, address = server.accept()
         data = c_socket.recv(1024)
@@ -139,7 +142,8 @@ def tcp_server_thread():
         print(f"received timestamp {received_stamp}")
         now = datetime.datetime.utcnow().timestamp()
         delay = now - received_stamp[0]
-        print_red(f"DEELLAAYYYY ISS {delay}")
+        print_red(f"DEELLAAYYYY IS {delay}")
+        return delay
 
     pass
 
@@ -153,13 +157,13 @@ def exchange_timestamps_thread(other_uuid: str, other_ip: str, other_tcp_port: i
     # if other_uuid = my_uuid don't connect
     if other_uuid == get_node_uuid():
         return
-
     print_yellow(f"ATTEMPTING TO CONNECT TO {other_uuid}")
     timestamp = datetime.datetime.utcnow().timestamp()
     print(f"sent timestamp {timestamp}")
     timestamp = bytearray(struct.pack("d", timestamp))
 
     # send time stamp to the source of the message
+    server.listen(50)
     client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     client_socket.connect((other_ip, other_tcp_port))
 
@@ -170,8 +174,10 @@ def exchange_timestamps_thread(other_uuid: str, other_ip: str, other_tcp_port: i
         print_red("ERROR")
     except IOError as e:
         print_red("error pipe")
-
-    client_socket.close()
+    thread3 = daemon_thread_builder(tcp_server_thread())
+    thread3.start()
+    delay = thread3.join()
+    neighbor_information.update({other_uuid: NeighborInfo(delay, counter)})
     pass
 
 
@@ -185,15 +191,14 @@ def daemon_thread_builder(target, args=()) -> threading.Thread:
 
 
 def entrypoint():
-    #thread1 = daemon_thread_builder(send_broadcast_thread)
-    #thread2 = daemon_thread_builder(receive_broadcast_thread)
-    thread3 = daemon_thread_builder(tcp_server_thread())
-    #thread1.start()
-    #thread2.start()
-    thread3.start()
-    #thread1.join()
-    #thread2.join()
-    thread3.join()
+    thread1 = daemon_thread_builder(send_broadcast_thread)
+    thread2 = daemon_thread_builder(receive_broadcast_thread)
+    #thread3 = daemon_thread_builder(tcp_server_thread())
+    thread1.start()
+    thread2.start()
+    #thread3.start()
+    thread1.join()
+    thread2.join()
     pass
 
 
